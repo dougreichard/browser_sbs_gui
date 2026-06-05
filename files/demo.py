@@ -27,47 +27,47 @@ from sbs import (
 def draw_main_screen(client_id):
     send_gui_clear(client_id, "main")
 
-    send_gui_text(client_id, "", "title", "SBS Remote GUI Demo",
+    send_gui_text(client_id, "", "title", "text:SBS Remote GUI Demo;color:blue",
                   2, 2, 98, 8)
 
-    send_gui_sub_region(client_id, "", "left_panel", "panel",
+    send_gui_sub_region(client_id, "", "left_panel", "",
                         2, 10, 48, 90)
 
-    send_gui_text(client_id,     "left_panel", "lbl_name", "Name:",
+    send_gui_text(client_id,     "left_panel", "lbl_name", "text:`Name:`",
                   2, 3, 98, 11)
-    send_gui_typein(client_id,   "left_panel", "inp_name", "Enter name…",
+    send_gui_typein(client_id,   "left_panel", "inp_name", "desc:Enter name…",
                     2, 13, 98, 23)
-    send_gui_text(client_id,     "left_panel", "lbl_vol", "Volume",
+    send_gui_text(client_id,     "left_panel", "lbl_vol", "text:Volume",
                   2, 26, 98, 34)
-    send_gui_slider(client_id,   "left_panel", "sld_volume", 65.0, "volume",
+    send_gui_slider(client_id,   "left_panel", "sld_volume", 65.0, "low:0;high:100",
                     2, 35, 98, 45)
-    send_gui_checkbox(client_id, "left_panel", "chk_mute", "Mute",
+    send_gui_checkbox(client_id, "left_panel", "chk_mute", "text:Mute",
                       2, 48, 65, 57)
-    send_gui_text(client_id,     "left_panel", "lbl_mode", "Mode:",
+    send_gui_text(client_id,     "left_panel", "lbl_mode", "text:`Mode:`",
                   2, 60, 98, 68)
-    send_gui_dropdown(client_id, "left_panel", "dd_mode", "Normal,Debug,Verbose",
+    send_gui_dropdown(client_id, "left_panel", "dd_mode", "list:Normal,Debug,Verbose",
                       2, 70, 98, 80)
 
-    send_gui_sub_region(client_id, "", "right_panel", "panel",
+    send_gui_sub_region(client_id, "", "right_panel", "",
                         52, 10, 98, 90)
 
-    send_gui_button(client_id,      "right_panel", "btn_ok",     "OK",
+    send_gui_button(client_id,      "right_panel", "btn_ok",     "text:OK",
                     4, 3, 57, 12)
-    send_gui_button(client_id,      "right_panel", "btn_cancel", "Cancel",
+    send_gui_button(client_id,      "right_panel", "btn_cancel", "text:Cancel",
                     4, 15, 57, 24)
-    send_gui_colorbutton(client_id, "right_panel", "col_red",   "#6b6565",
+    send_gui_colorbutton(client_id, "right_panel", "col_red",   "color:#6b6565",
                          4, 30, 26, 38)
-    send_gui_colorbutton(client_id, "right_panel", "col_green", "#22c55e",
+    send_gui_colorbutton(client_id, "right_panel", "col_green", "color:#22c55e",
                          30, 30, 52, 38)
-    send_gui_colorbutton(client_id, "right_panel", "col_blue",  "#4f8ef7",
+    send_gui_colorbutton(client_id, "right_panel", "col_blue",  "color:#4f8ef7",
                          56, 30, 78, 38)
-    send_gui_icon(client_id, "right_panel", "ico_star", "⭐",
+    send_gui_icon(client_id, "right_panel", "ico_star", "text:⭐",
                   4, 42, 26, 54)
-    send_gui_icon(client_id, "right_panel", "ico_bell", "🔔",
+    send_gui_icon(client_id, "right_panel", "ico_bell", "text:🔔",
                   30, 42, 52, 54)
     send_gui_face(client_id, "right_panel", "face_happy", "😄",
                   4, 57, 44, 73)
-    send_gui_clickregion(client_id, "right_panel", "clk_zone", "click me!",
+    send_gui_clickregion(client_id, "right_panel", "clk_zone", "text:click me!",
                          4, 77, 98, 90)
 
     send_gui_complete(client_id, "main")
@@ -76,17 +76,17 @@ def draw_main_screen(client_id):
 def draw_detail_screen(client_id):
     send_gui_clear(client_id, "detail")
 
-    send_gui_text(client_id, "", "detail_title", "Detail View",
+    send_gui_text(client_id, "", "detail_title", "text:Detail View",
                   2, 2, 98, 8)
 
-    send_gui_sub_region(client_id, "", "detail_panel", "panel",
+    send_gui_sub_region(client_id, "", "detail_panel", "",
                         10, 12, 90, 80)
 
     send_gui_text(client_id, "detail_panel", "detail_msg",
-                  "You clicked OK.\nThis is the detail page.",
+                  "text:`You clicked OK.\nThis is the detail page.`",
                   5, 5, 95, 40)
 
-    send_gui_button(client_id, "detail_panel", "btn_back", "← Back",
+    send_gui_button(client_id, "detail_panel", "btn_back", "text:← Back",
                     5, 75, 40, 90)
 
     send_gui_complete(client_id, "detail")

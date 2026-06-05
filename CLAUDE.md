@@ -75,16 +75,6 @@ in the range 0–100** (percentages).
   of the named `send_gui_sub_region`'s bounding box. `(0,0)` is the
   sub_region's top-left and `(100,100)` is its bottom-right.
 
-```python
-# A button in the centre of the screen (root coords)
-send_gui_button(clientID, parent="", tag="btn_ok", style="OK",
-                left=40, top=45, right=60, bottom=55)
-
-# A button filling the top-right quarter of a sub_region called "panel"
-send_gui_button(clientID, parent="panel", tag="btn_ok", style="OK",
-                left=50, top=0, right=100, bottom=50)
-```
-
 ### Widget signatures
 
 All standard widgets share the same positional signature:
@@ -98,8 +88,8 @@ send_gui_*(clientID, parent, tag, style, left, top, right, bottom)
 | `clientID` | int | Target browser (0 = all) |
 | `parent` | str | Logical grouping tag (visual-only; does not affect coordinate origin) |
 | `tag` | str | Unique identifier for this widget; returned in browser events |
-| `style` | str | Widget-specific: label text, CSS colour, comma-separated options, icon glyph, image URL, etc. |
-| `left/top/right/bottom` | float | Root-relative 0–1 bounding box |
+| `style` | str | Style string: `key:value;key:value` — see Style String Format below |
+| `left/top/right/bottom` | float | Root-relative 0–100 bounding box |
 
 ### Standard widgets
 
@@ -108,34 +98,26 @@ send_gui_button(clientID, parent, tag, style, left, top, right, bottom)
 send_gui_checkbox(clientID, parent, tag, style, left, top, right, bottom)
 send_gui_clickregion(clientID, parent, tag, style, left, top, right, bottom)
 send_gui_colorbutton(clientID, parent, tag, style, left, top, right, bottom)
-    # style = CSS colour string e.g. "#ef4444"
 send_gui_colorcheckbox(clientID, parent, tag, style, left, top, right, bottom)
-    # style = CSS colour string
 send_gui_dropdown(clientID, parent, tag, style, left, top, right, bottom)
-    # style = comma-separated option list e.g. "Normal,Debug,Verbose"
 send_gui_icon(clientID, parent, tag, style, left, top, right, bottom)
-    # style = emoji or unicode glyph
 send_gui_iconbutton(clientID, parent, tag, style, left, top, right, bottom)
 send_gui_iconcheckbox(clientID, parent, tag, style, left, top, right, bottom)
 send_gui_image(clientID, parent, tag, style, left, top, right, bottom)
-    # style = image URL
 send_gui_rawiconbutton(clientID, parent, tag, style, left, top, right, bottom)
 send_gui_sub_region(clientID, parent, tag, style, left, top, right, bottom)
-    # visual panel/grouping box; children still use root coords
 send_gui_text(clientID, parent, tag, style, left, top, right, bottom)
-    # style = display text
 send_gui_typein(clientID, parent, tag, style, left, top, right, bottom)
-    # style = placeholder text
 ```
 
 ### Widgets with non-standard parameters
 
 ```python
 send_gui_face(clientID, parent, tag, face_string, left, top, right, bottom)
-    # face_string = emoji or face content
+    # face_string = emoji or face content (not a style string)
 
 send_gui_slider(clientID, parent, tag, current, style, left, top, right, bottom)
-    # current = initial value (0–100)
+    # current = initial value (float); style string carries low/high/etc.
 
 send_gui_hotkey(clientID, category, tag, keyType, description)
     # keyType = JS KeyboardEvent.key or .code string e.g. "F5", "Enter"
@@ -144,11 +126,77 @@ send_gui_hotkey(clientID, category, tag, keyType, description)
 
 ---
 
+## Style String Format
+
+The `style` parameter is a structured string of `key:value` pairs separated by
+semicolons:
+
+```
+key:value;key:value;key:value
+```
+
+**Parsing rules:**
+- Pairs are separated by `;`.
+- Key and value are separated by the **first** `:` in the pair — values may
+  contain colons freely (e.g. `color:#ef4444` works without escaping).
+- The `text` key's value may optionally be enclosed in backticks to protect
+  semicolons or colons inside the text: `` text:`Hello; World` `` → `Hello; World`.
+- Boolean flags (`state`, `visible`, `pixel_aligned`, `password`, etc.) are
+  truthy when the value is `on`, `yes`, `True`, or `active` (case-insensitive).
+  `show_number` on `slider` is a hide flag — falsy values (`no`, `False`) hide
+  the number.
+
+### Common keys (most widgets)
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `text` | str | Display text; backtick-enclose to include `;` or `:` |
+| `color` | CSS color | Text color (or button/swatch color for colorbutton/colorcheckbox) |
+| `font` | str | Font tag from preferences.json |
+| `draw_layer` | int | CSS z-index; default 1001 |
+| `pixel_aligned` | flag | Use px instead of % for positioning |
+
+### Widget-specific keys
+
+| Widget | Key | Description |
+|--------|-----|-------------|
+| `checkbox` | `state` | Initial checked state (flag) |
+| `checkbox` | `visible` | Initial visibility (flag) |
+| `clickregion` | `background_color` | Background fill color for the region |
+| `dropdown` | `list` | Comma-separated option list, e.g. `Normal,Debug,Verbose` |
+| `icon`, `iconbutton`, `iconcheckbox`, `rawiconbutton` | `icon_index` | Integer index into `grid-icon-sheet.png` sprite sheet |
+| `image` | `image` | Filename without `.png` suffix; path relative to `data/graphics/` |
+| `image` | `sub_rect` | Four comma-separated 0–1 floats: `left,top,right,bottom` of source image |
+| `image` | `sub_left/top/right/bottom` | Individual sub-rect edges (alternative to `sub_rect`) |
+| `slider` | `low` | Minimum value (float) |
+| `slider` | `high` | Maximum value (float) |
+| `slider` | `show_number` | Hide the numeric readout when `no` or `False` |
+| `text` | `justify` | Text alignment: `left`, `right`, or `center` |
+| `typein` | `desc` | Placeholder text |
+| `typein` | `password` | Mask input as asterisks (flag) |
+
+### Examples
+
+```python
+send_gui_button(cid, "", "btn_ok", "text:OK;color:#22c55e", 40, 45, 60, 55)
+
+send_gui_text(cid, "", "lbl", "text:`Name:`;justify:right", 2, 3, 48, 11)
+
+send_gui_slider(cid, "", "vol", 65.0, "low:0;high:100", 2, 35, 98, 45)
+
+send_gui_dropdown(cid, "", "dd", "list:Normal,Debug,Verbose", 2, 70, 98, 80)
+
+send_gui_image(cid, "", "img", "image:hud/panel;sub_rect:0,0,0.5,1", 0, 0, 50, 100)
+
+send_gui_typein(cid, "", "inp", "desc:Enter name…;password:no", 2, 13, 98, 23)
+```
+
+---
+
 ## Browser Events
 
 When the user interacts with a widget the browser sends a JSON message back
-over the same WebSocket. The server currently prints these; wire them to a
-second `queue.Queue` in `server.py` to consume them in your script engine.
+over the same WebSocket.
 
 | Event type | Widgets | Extra fields |
 |------------|---------|--------------|
@@ -162,6 +210,9 @@ Example event payload received by the server:
 { "type": "click", "tag": "btn_ok", "clientID": 1 }
 { "type": "change", "tag": "sld_volume", "value": 72.0, "clientID": 1 }
 ```
+
+Events are delivered to the script engine via `sbs.gui_event_queue`
+(a `multiprocessing.Queue` populated by `server.py`).
 
 ---
 
@@ -181,8 +232,7 @@ replays the last frame so late-joining or refreshed clients always see the
 current screen without needing the script engine to redraw.
 
 ### clientID routing
-- `clientID > 0` — commands are sent only to browsers connected at
-  `ws://host/ws/<clientID>`.
+- `clientID > 0` — commands are sent only to the browser assigned that ID.
 - `clientID == 0` — commands are broadcast to **all** connected browsers and
   the frame is also replayed to every future client regardless of their own ID.
 
@@ -194,34 +244,15 @@ change the coordinate origin.
 
 ---
 
-## Adding Browser Event Consumption
-
-To receive widget events in your script engine, add an event queue to
-`server.py`:
-
-```python
-# server.py addition
-import sbs
-gui_event_queue: queue.Queue = queue.Queue()   # export alongside gui_queue
-
-# inside websocket_endpoint, replace the print:
-gui_event_queue.put(event)
-```
-
-Then in your script engine:
-```python
-from server import gui_event_queue   # or pass the queue at startup
-
-event = gui_event_queue.get()        # blocks until an event arrives
-print(event["type"], event["tag"])
-```
-
----
-
 ## Known Limitations / TODO
 
-- `send_gui_slider` min/max are currently hardcoded to 0–100 in the browser; the `style` parameter could encode `"min,max"` to override.
-- `send_gui_dropdown` option list is carried in `style` as a comma-separated string; values containing commas must be avoided or a different delimiter used.
-- `send_gui_image` loads images by URL; base64 data-URIs work but must be set in `style`.
-- Hotkeys registered via `send_gui_hotkey` accumulate across frames (no deregistration on `clear`); avoid registering the same key repeatedly.
-- The server does not authenticate WebSocket connections; run behind a firewall or add token auth for production use.
+- `icon_index` references `grid-icon-sheet.png` which is not bundled; the browser
+  displays `[N]` as a placeholder instead of the sprite.
+- `send_gui_image` sub-rect is implemented via CSS `background-size`/`background-position`
+  math; images must be served from the same origin or have permissive CORS headers.
+- Hotkeys registered via `send_gui_hotkey` accumulate across frames (no deregistration
+  on `clear`); avoid registering the same key repeatedly.
+- The server does not authenticate WebSocket connections; run behind a firewall or
+  add token auth for production use.
+- `send_gui_dropdown` option values must not contain commas (the `list` value is
+  split on commas; no alternate delimiter is supported).

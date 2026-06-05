@@ -70,8 +70,9 @@
   .w-rawiconbutton { background:transparent; border:none; cursor:pointer; font-size:18px; transition:transform 0.15s; }
   .w-rawiconbutton:hover { transform:scale(1.1); }
 
-  .w-slider { padding:0 8px; }
-  .w-slider input[type=range] { width:100%; accent-color:var(--accent); cursor:pointer; }
+  .w-slider { padding:0 8px; display:flex; align-items:center; gap:4px; }
+  .w-slider input[type=range] { flex:1; accent-color:var(--accent); cursor:pointer; }
+  .w-slider .slider-num { font-size:11px; min-width:2.5em; text-align:right; color:var(--text-dim); flex-shrink:0; }
 
   .w-sub_region { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius); }
 
@@ -241,38 +242,85 @@ function toRoot(p, left, top, right, bottom) {
   };
 }
 
+// ── Style string parser ───────────────────────────────────────────────────────
+// Format: "key:value;key:value;..."
+// Values may be enclosed in backticks to include literal semicolons/colons:
+//   text:`Hello; World`  →  { text: "Hello; World" }
+function parseStyle(styleStr) {
+  if (!styleStr) return {};
+  const r = {};
+
+  // Split on ';' but not inside backtick-quoted values
+  const pairs = [];
+  let cur = '', inBt = false;
+  for (let i = 0; i < styleStr.length; i++) {
+    const ch = styleStr[i];
+    if (ch === '`')            { inBt = !inBt; cur += ch; }
+    else if (ch === ';' && !inBt) { pairs.push(cur); cur = ''; }
+    else                       { cur += ch; }
+  }
+  if (cur) pairs.push(cur);
+
+  pairs.forEach(p => {
+    const i = p.indexOf(':');
+    if (i > 0) {
+      const key = p.slice(0, i).trim();
+      let val = p.slice(i + 1);
+      // Strip optional backtick enclosure
+      if (val.startsWith('`') && val.endsWith('`') && val.length >= 2)
+        val = val.slice(1, -1);
+      r[key] = val;
+    }
+  });
+  return r;
+}
+
+// True for Artemis boolean flag values: on / yes / True / active
+function isOn(v) { return v != null && /^(on|yes|true|active)$/i.test(String(v).trim()); }
+
 // ── cmdWidget ─────────────────────────────────────────────────────────────────
 function cmdWidget(msg) {
   const { cmd, tag, parent, left, top, right, bottom } = msg;
-  const el = buildWidget(msg);
+  const s = parseStyle(msg.style);
+  const el = buildWidget(msg, s);
   if (!el) return;
 
   el.classList.add('widget');
   if (tag) el.dataset.tag = tag;
+  if (s.draw_layer) el.style.zIndex = s.draw_layer;
 
-  // Resolve coords: parent-relative if parent is set and known, else root-canvas
-  let rc = (parent && backRegions[parent])
-    ? toRoot(backRegions[parent], left, top, right, bottom)
-    : { left, top, right, bottom };
+  let rc;
+  if (isOn(s.pixel_aligned)) {
+    // Coordinates are pixel values, not percentages
+    el.style.left   = left + 'px';
+    el.style.top    = top + 'px';
+    el.style.width  = (right - left) + 'px';
+    el.style.height = (bottom - top) + 'px';
+    rc = { left, top, right, bottom };
+  } else {
+    rc = (parent && backRegions[parent])
+      ? toRoot(backRegions[parent], left, top, right, bottom)
+      : { left, top, right, bottom };
+    placeRoot(el, rc.left, rc.top, rc.right, rc.bottom);
+  }
 
-  placeRoot(el, rc.left, rc.top, rc.right, rc.bottom);
-
-  // Register sub_regions so their children can resolve against them
   if (cmd === 'sub_region') backRegions[tag] = rc;
-
   backBuf.appendChild(el);
   log(`  +${cmd} tag=${tag} → #${backBuf.id}  [${pct(rc.left)},${pct(rc.top)},${pct(rc.right-rc.left)},${pct(rc.bottom-rc.top)}]`, 'dbg');
 }
 
 // ── buildWidget ───────────────────────────────────────────────────────────────
-function buildWidget(msg) {
-  const { cmd, tag, style } = msg;
+// s = parsed style object from parseStyle(msg.style)
+function buildWidget(msg, s) {
+  const { cmd, tag } = msg;
   let el;
   switch (cmd) {
     case 'button': {
       el = document.createElement('button');
       el.className = 'w-button';
-      el.textContent = style || tag;
+      el.textContent = s.text || tag;
+      if (s.color) el.style.color = s.color;
+      if (s.font)  el.style.fontFamily = s.font;
       el.addEventListener('click', () => sendEvent('click', tag));
       break;
     }
@@ -280,37 +328,48 @@ function buildWidget(msg) {
       el = document.createElement('label');
       el.className = 'w-checkbox';
       const cb = document.createElement('input'); cb.type = 'checkbox';
-      const sp = document.createElement('span'); sp.textContent = style || tag;
+      cb.checked = isOn(s.state);
+      if (s.visible !== undefined && !isOn(s.visible)) el.style.visibility = 'hidden';
+      const sp = document.createElement('span');
+      sp.textContent = s.text || tag;
+      if (s.color) sp.style.color = s.color;
+      if (s.font)  sp.style.fontFamily = s.font;
       el.append(cb, sp);
       cb.addEventListener('change', () => sendEvent('change', tag, { checked: cb.checked }));
       break;
     }
     case 'clickregion': {
       el = document.createElement('div'); el.className = 'w-clickregion';
+      if (s.text) { el.textContent = s.text; if (s.color) el.style.color = s.color; }
+      if (s.background_color) el.style.background = s.background_color;
       el.addEventListener('click', () => sendEvent('click', tag));
       break;
     }
     case 'colorbutton': {
       el = document.createElement('div'); el.className = 'w-colorbutton';
-      el.style.background = style || '#4f8ef7'; el.title = tag;
-      el.addEventListener('click', () => sendEvent('click', tag, { color: style }));
+      const btnColor = s.color || '#4f8ef7';
+      el.style.background = btnColor; el.title = tag;
+      el.addEventListener('click', () => sendEvent('click', tag, { color: btnColor }));
       break;
     }
     case 'colorcheckbox': {
       el = document.createElement('label'); el.className = 'w-colorcheckbox';
       const sw = document.createElement('div'); sw.className = 'swatch';
-      sw.style.background = style || '#4f8ef7';
+      const chkColor = s.color || '#4f8ef7';
+      sw.style.background = chkColor;
       const cb2 = document.createElement('input'); cb2.type = 'checkbox'; cb2.style.display = 'none';
       el.append(sw, cb2);
-      el.addEventListener('click', () => { cb2.checked = !cb2.checked; sendEvent('change', tag, { checked: cb2.checked, color: style }); });
+      el.addEventListener('click', () => { cb2.checked = !cb2.checked; sendEvent('change', tag, { checked: cb2.checked, color: chkColor }); });
       break;
     }
     case 'dropdown': {
       el = document.createElement('div'); el.className = 'w-dropdown';
       const sel = document.createElement('select');
-      (style || tag).split(',').forEach(o => {
+      (s.list || s.text || tag).split(',').forEach(o => {
         const opt = document.createElement('option'); opt.value = opt.textContent = o.trim(); sel.appendChild(opt);
       });
+      if (s.color) sel.style.color = s.color;
+      if (s.font)  sel.style.fontFamily = s.font;
       el.appendChild(sel);
       sel.addEventListener('change', () => sendEvent('change', tag, { value: sel.value }));
       break;
@@ -321,48 +380,98 @@ function buildWidget(msg) {
     }
     case 'icon': {
       el = document.createElement('div'); el.className = 'w-icon';
-      el.textContent = style || '🔷'; break;
+      el.textContent = s.text || (s.icon_index !== undefined ? `[${s.icon_index}]` : '🔷');
+      if (s.color) el.style.color = s.color;
+      if (s.font)  el.style.fontFamily = s.font;
+      break;
     }
     case 'iconbutton': {
       el = document.createElement('div'); el.className = 'w-iconbutton';
-      el.textContent = style || '🔵';
+      el.textContent = s.icon_index !== undefined ? `[${s.icon_index}]` : '🔵';
+      if (s.color) el.style.color = s.color;
       el.addEventListener('click', () => sendEvent('click', tag)); break;
     }
     case 'iconcheckbox': {
       el = document.createElement('div'); el.className = 'w-iconcheckbox';
-      el.textContent = style || '☐';
+      el.textContent = s.icon_index !== undefined ? `[${s.icon_index}]` : '☐';
+      if (s.color) el.style.color = s.color;
       let chk = false;
       el.addEventListener('click', () => { chk = !chk; el.classList.toggle('checked', chk); sendEvent('change', tag, { checked: chk }); });
       break;
     }
     case 'image': {
       el = document.createElement('div'); el.className = 'w-image';
-      const img = document.createElement('img'); img.src = style || ''; img.alt = tag;
-      el.appendChild(img); break;
+      if (s.image) {
+        const imgSrc = s.image + '.png';
+        const hasSub = s.sub_rect || s.sub_left !== undefined || s.sub_top !== undefined;
+        if (hasSub) {
+          // sub_rect values are 0–1 fractions of the source image
+          const parts = s.sub_rect ? s.sub_rect.split(',').map(Number) : [0, 0, 1, 1];
+          const sl = s.sub_left   !== undefined ? +s.sub_left   : parts[0];
+          const st = s.sub_top    !== undefined ? +s.sub_top    : parts[1];
+          const sr = s.sub_right  !== undefined ? +s.sub_right  : parts[2];
+          const sb = s.sub_bottom !== undefined ? +s.sub_bottom : parts[3];
+          const sw = sr - sl || 1, sh = sb - st || 1;
+          el.style.backgroundImage    = `url('${imgSrc}')`;
+          el.style.backgroundRepeat   = 'no-repeat';
+          el.style.backgroundSize     = `${(100 / sw).toFixed(2)}% ${(100 / sh).toFixed(2)}%`;
+          el.style.backgroundPosition = `${(-sl / sw * 100).toFixed(2)}% ${(-st / sh * 100).toFixed(2)}%`;
+        } else {
+          const img = document.createElement('img'); img.src = imgSrc; img.alt = tag;
+          el.appendChild(img);
+        }
+      }
+      break;
     }
     case 'rawiconbutton': {
       el = document.createElement('div'); el.className = 'w-rawiconbutton';
-      el.textContent = style || '▶';
+      el.textContent = s.icon_index !== undefined ? `[${s.icon_index}]` : '▶';
+      if (s.color) el.style.color = s.color;
       el.addEventListener('click', () => sendEvent('click', tag)); break;
     }
     case 'slider': {
       el = document.createElement('div'); el.className = 'w-slider';
       const rng = document.createElement('input'); rng.type = 'range';
-      rng.min = 0; rng.max = 100; rng.value = msg.current ?? 50;
-      el.appendChild(rng);
-      rng.addEventListener('input', () => sendEvent('change', tag, { value: +rng.value }));
+      rng.min = s.low ?? 0; rng.max = s.high ?? 100; rng.value = msg.current ?? 50;
+      // show_number defaults to shown; hide only if explicitly set to a falsy flag value
+      const hideNum = s.show_number !== undefined && !isOn(s.show_number);
+      if (!hideNum) {
+        const numEl = document.createElement('span'); numEl.className = 'slider-num';
+        numEl.textContent = rng.value;
+        if (s.color) numEl.style.color = s.color;
+        rng.addEventListener('input', () => { numEl.textContent = rng.value; sendEvent('change', tag, { value: +rng.value }); });
+        el.append(rng, numEl);
+      } else {
+        rng.addEventListener('input', () => sendEvent('change', tag, { value: +rng.value }));
+        el.appendChild(rng);
+      }
       break;
     }
     case 'sub_region': {
-      el = document.createElement('div'); el.className = 'w-sub_region'; break;
+      el = document.createElement('div'); el.className = 'w-sub_region';
+      if (s.text) { el.textContent = s.text; if (s.color) el.style.color = s.color; }
+      break;
     }
     case 'text': {
       el = document.createElement('div'); el.className = 'w-text';
-      el.textContent = style || tag; break;
+      el.textContent = s.text || tag;
+      if (s.color) el.style.color = s.color;
+      if (s.font)  el.style.fontFamily = s.font;
+      if (s.justify) {
+        const jmap = { left: 'flex-start', right: 'flex-end', center: 'center' };
+        const j = jmap[s.justify.toLowerCase()];
+        if (j) { el.style.justifyContent = j; el.style.alignItems = j; el.style.textAlign = s.justify; }
+      }
+      break;
     }
     case 'typein': {
       el = document.createElement('div'); el.className = 'w-typein';
-      const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = style || tag;
+      const inp = document.createElement('input');
+      inp.type = isOn(s.password) ? 'password' : 'text';
+      inp.placeholder = s.desc || '';
+      if (s.text)  inp.value = s.text;
+      if (s.color) inp.style.color = s.color;
+      if (s.font)  inp.style.fontFamily = s.font;
       el.appendChild(inp);
       inp.addEventListener('change',  () => sendEvent('change', tag, { value: inp.value }));
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') sendEvent('submit', tag, { value: inp.value }); });
