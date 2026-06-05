@@ -29,6 +29,13 @@ from fastapi.responses import HTMLResponse
 
 import sbs  # shares gui_queue
 
+# Set to False to suppress server log output
+VERBOSE: bool = True
+
+def _log(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
+
 # Set by run_server() before uvicorn starts; signalled from the lifespan.
 _ready_event: Optional[multiprocessing.Event] = None
 
@@ -80,17 +87,17 @@ async def _replay(client_id: int, ws: WebSocket) -> None:
     async with _get_lock():
         frames_to_replay = list(_last_frame.get(0, [])) + list(_last_frame.get(client_id, []))
 
-    print(f"[replay] client={client_id} sending {len(frames_to_replay)} commands "
-          f"(last_frame keys={list(_last_frame.keys())})")
+    _log(f"[replay] client={client_id} sending {len(frames_to_replay)} commands "
+         f"(last_frame keys={list(_last_frame.keys())})")
 
     for payload in frames_to_replay:
         try:
             await ws.send_text(json.dumps(payload))
         except Exception as e:
-            print(f"[replay] send failed: {e}")
+            _log(f"[replay] send failed: {e}")
             break
 
-    print(f"[replay] client={client_id} done")
+    _log(f"[replay] client={client_id} done")
 
 # ---------------------------------------------------------------------------
 # Broadcast + frame recording
@@ -195,7 +202,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     await _register(client_id, websocket)
     sbs.client_event_queue.put({"event": "connect", "clientID": client_id})
-    print(f"[server] client {client_id} connected")
+    _log(f"[server] client {client_id} connected")
 
     # Immediately paint the current screen for this client
     await _replay(client_id, websocket)
@@ -205,10 +212,10 @@ async def websocket_endpoint(websocket: WebSocket):
             data  = await websocket.receive_text()
             event = json.loads(data)
             event["clientID"] = client_id
-            print(f"[event]  client={client_id} {event}")
+            _log(f"[event]  client={client_id} {event}")
             sbs.gui_event_queue.put(event)
     except WebSocketDisconnect:
-        print(f"[server] client {client_id} disconnected")
+        _log(f"[server] client {client_id} disconnected")
     finally:
         await _unregister(client_id, websocket)
         sbs.client_event_queue.put({"event": "disconnect", "clientID": client_id})
